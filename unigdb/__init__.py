@@ -4,7 +4,7 @@ import unigdb.commands
 # import unigdb.commands.context
 # import unigdb.commands.heap
 # import unigdb.commands.hexdump
-# import unigdb.commands.ida
+import unigdb.commands.load
 # import unigdb.commands.next
 # import unigdb.commands.pattern
 # import unigdb.commands.pcustom

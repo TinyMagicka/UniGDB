@@ -1,6 +1,5 @@
 import cmd
-import re
-import binascii
+import unigdb.commands
 
 
 def default_prompt(x):
@@ -12,34 +11,24 @@ class CoreShell(cmd.Cmd):
     prompt = default_prompt
 
     def __init__(self):
+        for cmdClass in unigdb.commands.__commands__:
+            self.register_cmd_class(cmdClass())
         self.register_command('quit', aliases=['q'], do_xxx=self.do_quit)
         super(CoreShell, self).__init__()
 
     def register_command(self, name, aliases=[], do_xxx=None, help_xxx=None, complete_xxx=None):
         for cmd_name in aliases + [name]:
-            setattr(self, 'do_%s' % cmd_name, do_xxx)
+            setattr(CoreShell, 'do_%s' % cmd_name, do_xxx)
             if help_xxx is not None:
-                setattr(self, 'help_%s' % cmd_name, help_xxx)
+                setattr(CoreShell, 'help_%s' % cmd_name, help_xxx)
             if complete_xxx is not None:
-                setattr(self, 'complete_%s' % cmd_name, complete_xxx)
+                setattr(CoreShell, 'complete_%s' % cmd_name, complete_xxx)
 
-    def parse_args(self, arg_line, **kwargs):
-        arg = re.findall('[\"\'].*?[\"\']|[^ ]+', arg_line)
-        if len(arg) != len(kwargs):
-            return None
-        result = {}
-        for k, v in zip(kwargs, arg):
-            if kwargs[k] == str:
-                result[k] = v
-            elif kwargs[k] == int:
-                # result[k] = ugdb.parse_and_eval(v)
-                result[k] = v
-            elif kwargs[k] == bytes:
-                if '\\x' in v:
-                    result[k] = binascii.unhexlify(v.replace('\\x', ''))
-                else:
-                    result[k] = binascii.unhexlify(v)
-        return result
+    def register_cmd_class(self, cls):
+        for name in [cls._cmdline_] + cls._aliases_:
+            setattr(CoreShell, 'do_%s' % name, cls.do_xxx)
+            setattr(CoreShell, 'help_%s' % name, cls.help_xxx)
+            setattr(CoreShell, 'complete_%s' % name, cls.complete_xxx)
 
     def do_quit(self, arg):
         return True

@@ -1,7 +1,8 @@
 import abc
 import sys
+import re
+import binascii
 
-# import gdb
 from unigdb.color import Color
 from unigdb.color import message
 import unigdb.config
@@ -26,19 +27,22 @@ class GenericCommand:
     """This is an abstract class for invoking commands, should not be instantiated."""
     __metaclass__ = abc.ABCMeta
 
-    def __init__(self, name):
+    _aliases_ = []
+
+    def __init__(self, complete=False):
         syntax = Color.yellowify("\nSyntax: ") + self._syntax_
         example = Color.yellowify("\nExample: ") + self._example_ if self._example_ else ""
         self.__doc__ = self.__doc__.replace(" " * 4, "") + syntax + example
+        self.complete = complete
 
     @abc.abstractmethod
-    def do_xxx(self):
+    def do_xxx(self, arg):
         pass
 
     def help_xxx(self):
         message.hint(self.__doc__)
 
-    def complete_xxx(self):
+    def complete_xxx(self, text, line, begidx, endidx):
         pass
 
     @abc.abstractproperty
@@ -48,6 +52,10 @@ class GenericCommand:
     @abc.abstractproperty
     def _syntax_(self):
         pass
+
+    # @abc.abstractproperty
+    # def _aliases_(self):
+    #     return []
 
     @abc.abstractproperty
     def _example_(self):
@@ -85,13 +93,17 @@ class GenericCommand:
         return unigdb.config.delete(key)
 
 
-def parse_arguments(args):
+def parse_arguments(arg_line):
+    # for reg in re.findall(r'[$@][a-z0-9]+', arg_line):
+    #     arg_line.replace(reg, unigdb.regs.get_register(reg), 1)
+    args = re.findall(r'[\"\'].*?[\"\']|[^ ]+', arg_line)
+    # replace quotes
+    args = list(map(lambda x: re.sub(r'[\"\']', '', x), args))
     result = []
     for item in args:
-        if item.isdigit():
-            result.append(int(item))
-        if item.lower().startswith('0x'):
-            result.append(int(item, 16))
+        if '\\x' in item:
+            item = binascii.unhexlify(item.replace('\\x', ''))
+            result.append(item)
         else:
             result.append(item)
     return result
