@@ -29,6 +29,7 @@ def update(event):
 
     module.ssize_t = module.long
     module.size_t = module.ulong
+    module.ptrsize = 4
 
 
 # Call it once so we load all of the types

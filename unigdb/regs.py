@@ -10,7 +10,7 @@ from unicorn.arm64_const import UC_ARM64_REG_X0, UC_ARM64_REG_X1, UC_ARM64_REG_X
     UC_ARM64_REG_X18, UC_ARM64_REG_X19, UC_ARM64_REG_X20, UC_ARM64_REG_X21, UC_ARM64_REG_X22, \
     UC_ARM64_REG_X23, UC_ARM64_REG_X24, UC_ARM64_REG_X25, UC_ARM64_REG_X26, UC_ARM64_REG_X27, \
     UC_ARM64_REG_X28, UC_ARM64_REG_X29, UC_ARM64_REG_X30, UC_ARM64_REG_SP, UC_ARM64_REG_PC, \
-    UC_ARM64_REG_CPSR, UC_ARM64_REG_FPSR, UC_ARM64_REG_FPCR, UC_ARM64_REG_FP
+    UC_ARM64_REG_FP
 from unicorn.mips_const import UC_MIPS_REG_ZERO, UC_MIPS_REG_AT, UC_MIPS_REG_V0, UC_MIPS_REG_V1, \
     UC_MIPS_REG_A0, UC_MIPS_REG_A1, UC_MIPS_REG_A2, UC_MIPS_REG_A3, UC_MIPS_REG_T0, UC_MIPS_REG_T1, \
     UC_MIPS_REG_T2, UC_MIPS_REG_T3, UC_MIPS_REG_T4, UC_MIPS_REG_T5, UC_MIPS_REG_T6, UC_MIPS_REG_T7, \
@@ -19,8 +19,7 @@ from unicorn.mips_const import UC_MIPS_REG_ZERO, UC_MIPS_REG_AT, UC_MIPS_REG_V0,
     UC_MIPS_REG_S8, UC_MIPS_REG_PC, UC_MIPS_REG_SP, UC_MIPS_REG_HI, UC_MIPS_REG_LO, UC_MIPS_REG_RA, \
     UC_MIPS_REG_GP, UC_MIPS_REG_FP
 
-from unigdb.color import Color
-# import unigdb.proc
+from unigdb.color import Color, message
 import unigdb.arch
 from unigdb.chain import lazy_dereference
 
@@ -31,6 +30,16 @@ def get_register(name):
         name = name[1:]
     uc_reg = unigdb.arch.CURRENT_ARCH.all_registers['$' + name]
     return unigdb.arch.UC.reg_read(uc_reg)
+
+
+def set_register(name, value: int):
+    if name.startswith('$'):
+        name = name[1:]
+    uc_reg = unigdb.arch.CURRENT_ARCH.all_registers.get('$' + name)
+    if not uc_reg:
+        message.error('Register "%s" not found' % name)
+    else:
+        unigdb.arch.UC.reg_write(uc_reg, value)
 
 
 def flags_to_human(reg_value, value_table):
@@ -175,7 +184,7 @@ class ARM(Architecture):
 
     def is_thumb(self):
         """Determine if the machine is currently in THUMB mode."""
-        return unigdb.proc.alive and get_register("$cpsr") & (1 << 5)
+        return unigdb.arch.alive and get_register("$cpsr") & (1 << 5)
 
     @property
     def pc(self):
@@ -323,9 +332,6 @@ class AARCH64(ARM):
         "$x30": UC_ARM64_REG_X30,
         "$sp": UC_ARM64_REG_SP,
         "$pc": UC_ARM64_REG_PC,
-        "$cpsr": UC_ARM64_REG_CPSR,
-        "$fpsr": UC_ARM64_REG_FPSR,
-        "$fpcr": UC_ARM64_REG_FPCR,
         "$fp": UC_ARM64_REG_FP,
     }
     return_register = "$x0"
