@@ -4,7 +4,7 @@ import unigdb.commands
 # import unigdb.commands.context
 # import unigdb.commands.heap
 # import unigdb.commands.hexdump
-import unigdb.commands.load
+import unigdb.commands.builtins
 # import unigdb.commands.next
 # import unigdb.commands.pattern
 # import unigdb.commands.pcustom
@@ -44,27 +44,25 @@ __all__ = [
     'ui',
 ]
 
-gdbu.CoreShell.prompt = unigdb.prompt.set_prompt
 
-
-pre_commands = [
-    'set confirm off',
-    'set verbose off',
-    'set pagination off',
-    'set height 0',
-    'set history filename /tmp/.gdb_history'
-    'set history expansion on',
-    'set history save on',
-    'set follow-fork-mode child',
-    'set backtrace past-main on',
-    'set step-mode on',
-    'set print pretty on',
-    'set width %i' % unigdb.ui.get_window_size()[1],
-    'handle SIGALRM nostop print nopass',
-    'handle SIGBUS  stop   print nopass',
-    'handle SIGPIPE nostop print nopass',
-    'handle SIGSEGV stop   print nopass',
-]
+# pre_commands = [
+#     'set confirm off',
+#     'set verbose off',
+#     'set pagination off',
+#     'set height 0',
+#     'set history filename /tmp/.gdb_history'
+#     'set history expansion on',
+#     'set history save on',
+#     'set follow-fork-mode child',
+#     'set backtrace past-main on',
+#     'set step-mode on',
+#     'set print pretty on',
+#     'set width %i' % unigdb.ui.get_window_size()[1],
+#     'handle SIGALRM nostop print nopass',
+#     'handle SIGBUS  stop   print nopass',
+#     'handle SIGPIPE nostop print nopass',
+#     'handle SIGSEGV stop   print nopass',
+# ]
 
 # for line in pre_commands:
 #     gdb.execute(line.strip())

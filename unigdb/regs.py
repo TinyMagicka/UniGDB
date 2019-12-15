@@ -1,31 +1,36 @@
 import abc
-# import gdb
+from unicorn.arm_const import UC_ARM_REG_R0, UC_ARM_REG_R1, UC_ARM_REG_R2, \
+    UC_ARM_REG_R3, UC_ARM_REG_R4, UC_ARM_REG_R5, UC_ARM_REG_R6, UC_ARM_REG_R7, \
+    UC_ARM_REG_R8, UC_ARM_REG_R9, UC_ARM_REG_R10, UC_ARM_REG_R11, UC_ARM_REG_R12, \
+    UC_ARM_REG_SP, UC_ARM_REG_LR, UC_ARM_REG_PC, UC_ARM_REG_CPSR, UC_ARM_REG_FP
+from unicorn.arm64_const import UC_ARM64_REG_X0, UC_ARM64_REG_X1, UC_ARM64_REG_X2, \
+    UC_ARM64_REG_X3, UC_ARM64_REG_X4, UC_ARM64_REG_X5, UC_ARM64_REG_X6, UC_ARM64_REG_X7, \
+    UC_ARM64_REG_X8, UC_ARM64_REG_X9, UC_ARM64_REG_X10, UC_ARM64_REG_X11, UC_ARM64_REG_X12, \
+    UC_ARM64_REG_X13, UC_ARM64_REG_X14, UC_ARM64_REG_X15, UC_ARM64_REG_X16, UC_ARM64_REG_X17, \
+    UC_ARM64_REG_X18, UC_ARM64_REG_X19, UC_ARM64_REG_X20, UC_ARM64_REG_X21, UC_ARM64_REG_X22, \
+    UC_ARM64_REG_X23, UC_ARM64_REG_X24, UC_ARM64_REG_X25, UC_ARM64_REG_X26, UC_ARM64_REG_X27, \
+    UC_ARM64_REG_X28, UC_ARM64_REG_X29, UC_ARM64_REG_X30, UC_ARM64_REG_SP, UC_ARM64_REG_PC, \
+    UC_ARM64_REG_CPSR, UC_ARM64_REG_FPSR, UC_ARM64_REG_FPCR, UC_ARM64_REG_FP
+from unicorn.mips_const import UC_MIPS_REG_ZERO, UC_MIPS_REG_AT, UC_MIPS_REG_V0, UC_MIPS_REG_V1, \
+    UC_MIPS_REG_A0, UC_MIPS_REG_A1, UC_MIPS_REG_A2, UC_MIPS_REG_A3, UC_MIPS_REG_T0, UC_MIPS_REG_T1, \
+    UC_MIPS_REG_T2, UC_MIPS_REG_T3, UC_MIPS_REG_T4, UC_MIPS_REG_T5, UC_MIPS_REG_T6, UC_MIPS_REG_T7, \
+    UC_MIPS_REG_T8, UC_MIPS_REG_T9, UC_MIPS_REG_S0, UC_MIPS_REG_S1, UC_MIPS_REG_S2, UC_MIPS_REG_S3, \
+    UC_MIPS_REG_S4, UC_MIPS_REG_S5, UC_MIPS_REG_S6, UC_MIPS_REG_S7, UC_MIPS_REG_K0, UC_MIPS_REG_K1, \
+    UC_MIPS_REG_S8, UC_MIPS_REG_PC, UC_MIPS_REG_SP, UC_MIPS_REG_HI, UC_MIPS_REG_LO, UC_MIPS_REG_RA, \
+    UC_MIPS_REG_GP, UC_MIPS_REG_FP
 
 from unigdb.color import Color
 # import unigdb.proc
-# import unigdb.arch
+import unigdb.arch
 from unigdb.chain import lazy_dereference
 
 
 # @unigdb.proc.OnlyWhenRunning
-def gdb77_get_register(name):
+def get_register(name):
     if name.startswith('$'):
         name = name[1:]
-    return gdb.parse_and_eval('$' + name)
-
-
-# @unigdb.proc.OnlyWhenRunning
-def gdb79_get_register(name):
-    if name.startswith('$'):
-        name = name[1:]
-    return gdb.newest_frame().read_register(name)
-
-
-try:
-    # gdb.Frame.read_register
-    get_register = gdb79_get_register
-except AttributeError:
-    get_register = gdb77_get_register
+    uc_reg = unigdb.arch.CURRENT_ARCH.all_registers['$' + name]
+    return unigdb.arch.UC.reg_read(uc_reg)
 
 
 def flags_to_human(reg_value, value_table):
@@ -43,6 +48,14 @@ class Architecture(object):
 
     @abc.abstractproperty
     def all_registers(self):
+        pass
+
+    @abc.abstractproperty
+    def uc_arch(self):
+        pass
+
+    @abc.abstractproperty
+    def uc_mode(self):
         pass
 
     @abc.abstractproperty
@@ -119,127 +132,29 @@ class Architecture(object):
         return key, val
 
 
-class RISCV(Architecture):
-    arch = "RISCV"
-    mode = "RISCV"
-
-    all_registers = ["$zero", "$ra", "$sp", "$gp", "$x4", "$t0", "$t1",
-                     "$t2", "$fp", "$s1", "$a1", "$a2", "$a3", "$a4",
-                     "$a5", "$a6", "$a7", "$s2", "$s3", "$s4", "$s5",
-                     "$s6", "$s7", "$s8", "$s9", "$s10", "$s11", "$t3",
-                     "$t4", "$t5", "$t6"]
-    return_register = "$a0"
-    function_parameters = ["$a0", "$a1", "$a2", "$a3", "$a4", "$a5", "$a6", "$a7"]
-    syscall_register = "$a7"
-    syscall_register = "ecall"
-    nop_insn = b"\x00\x00\x00\x13"
-    # RISC-V has no flags registers
-    flag_register = None
-    flag_register_to_human = None
-    flags_table = None
-
-    @property
-    def instruction_length(self):
-        return 4
-
-    def is_call(self, insn):
-        return insn.mnemonic == "call"
-
-    def is_ret(self, insn):
-        mnemo = insn.mnemonic
-        if mnemo == "ret":
-            return True
-        elif (mnemo == "jalr" and insn.operands[0] == "zero" and
-              insn.operands[1] == "ra" and insn.operands[2] == 0):
-            return True
-        elif (mnemo == "c.jalr" and insn.operands[0] == "ra"):
-            return True
-        return False
-
-    @classmethod
-    def mprotect_asm(cls, addr, size, perm):
-        raise OSError("Architecture {:s} not supported yet".format(cls.arch))
-
-    def is_conditional_branch(self, insn):
-        return insn.mnemonic.startswith("b")
-
-    def is_branch_taken(self, insn):
-        def long_to_twos_complement(v):
-            """Convert a python long value to its two's complement."""
-            if is_elf32():
-                if v & 0x80000000:
-                    return v - 0x100000000
-            elif is_elf64():
-                if v & 0x8000000000000000:
-                    return v - 0x10000000000000000
-            else:
-                raise OSError("RISC-V: ELF file is not ELF32 or ELF64. This is not currently supported")
-            return v
-
-        mnemo = insn.mnemonic
-        condition = mnemo[1:]
-
-        if condition.endswith("z"):
-            # r2 is the zero register if we are comparing to 0
-            rs1 = get_register(insn.operands[0])
-            rs2 = get_register("$zero")
-            condition = condition[:-1]
-        elif len(insn.operands) > 2:
-            # r2 is populated with the second operand
-            rs1 = get_register(insn.operands[0])
-            rs2 = get_register(insn.operands[1])
-        else:
-            raise OSError("RISC-V: Failed to get rs1 and rs2 for instruction: `{}`".format(insn))
-
-        # If the conditional operation is not unsigned, convert the python long into
-        # its two's complement
-        if not condition.endswith("u"):
-            rs2 = long_to_twos_complement(rs2)
-            rs1 = long_to_twos_complement(rs1)
-        else:
-            condition = condition[:-1]
-
-        if condition == "eq":
-            if rs1 == rs2:
-                taken, reason = True, "{}={}".format(rs1, rs2)
-            else:
-                taken, reason = False, "{}!={}".format(rs1, rs2)
-        elif condition == "ne":
-            if rs1 != rs2:
-                taken, reason = True, "{}!={}".format(rs1, rs2)
-            else:
-                taken, reason = False, "{}={}".format(rs1, rs2)
-        elif condition == "lt":
-            if rs1 < rs2:
-                taken, reason = True, "{}<{}".format(rs1, rs2)
-            else:
-                taken, reason = False, "{}>={}".format(rs1, rs2)
-        elif condition == "ge":
-            if rs1 < rs2:
-                taken, reason = True, "{}>={}".format(rs1, rs2)
-            else:
-                taken, reason = False, "{}<{}".format(rs1, rs2)
-        else:
-            raise OSError("RISC-V: Conditional instruction `{:s}` not supported yet".format(insn))
-
-        return taken, reason
-
-    def get_ra(self, insn, frame):
-        ra = None
-        if self.is_ret(insn):
-            ra = get_register("$ra")
-        elif frame.older():
-            ra = frame.older().pc()
-        return ra
-
-
 class ARM(Architecture):
     arch = "ARM"
 
-    all_registers = ["$r0", "$r1", "$r2", "$r3", "$r4", "$r5", "$r6",
-                     "$r7", "$r8", "$r9", "$r10", "$r11", "$r12", "$sp",
-                     "$lr", "$pc", "$cpsr", ]
-
+    all_registers = {
+        "$r0": UC_ARM_REG_R0,
+        "$r1": UC_ARM_REG_R1,
+        "$r2": UC_ARM_REG_R2,
+        "$r3": UC_ARM_REG_R3,
+        "$r4": UC_ARM_REG_R4,
+        "$r5": UC_ARM_REG_R5,
+        "$r6": UC_ARM_REG_R6,
+        "$r7": UC_ARM_REG_R7,
+        "$r8": UC_ARM_REG_R8,
+        "$r9": UC_ARM_REG_R9,
+        "$r10": UC_ARM_REG_R10,
+        "$r11": UC_ARM_REG_R11,
+        "$r12": UC_ARM_REG_R12,
+        "$sp": UC_ARM_REG_SP,
+        "$lr": UC_ARM_REG_LR,
+        "$pc": UC_ARM_REG_PC,
+        "$cpsr": UC_ARM_REG_CPSR,
+        "$fp": UC_ARM_REG_FP,
+    }
     # http://infocenter.arm.com/help/index.jsp?topic=/com.arm.doc.dui0041c/Caccegih.html
     # return b"\x00\x00\xa0\xe1" # mov r0,r0
     nop_insn = b"\x01\x10\xa0\xe1"  # mov r1,r1
@@ -374,13 +289,45 @@ class AARCH64(ARM):
     arch = "ARM64"
     mode = "ARM"
 
-    all_registers = [
-        "$x0", "$x1", "$x2", "$x3", "$x4", "$x5", "$x6", "$x7",
-        "$x8", "$x9", "$x10", "$x11", "$x12", "$x13", "$x14", "$x15",
-        "$x16", "$x17", "$x18", "$x19", "$x20", "$x21", "$x22", "$x23",
-        "$x24", "$x25", "$x26", "$x27", "$x28", "$x29", "$x30", "$sp",
-        "$pc", "$cpsr", "$fpsr", "$fpcr",
-    ]
+    all_registers = {
+        "$x0": UC_ARM64_REG_X0,
+        "$x1": UC_ARM64_REG_X1,
+        "$x2": UC_ARM64_REG_X2,
+        "$x3": UC_ARM64_REG_X3,
+        "$x4": UC_ARM64_REG_X4,
+        "$x5": UC_ARM64_REG_X5,
+        "$x6": UC_ARM64_REG_X6,
+        "$x7": UC_ARM64_REG_X7,
+        "$x8": UC_ARM64_REG_X8,
+        "$x9": UC_ARM64_REG_X9,
+        "$x10": UC_ARM64_REG_X10,
+        "$x11": UC_ARM64_REG_X11,
+        "$x12": UC_ARM64_REG_X12,
+        "$x13": UC_ARM64_REG_X13,
+        "$x14": UC_ARM64_REG_X14,
+        "$x15": UC_ARM64_REG_X15,
+        "$x16": UC_ARM64_REG_X16,
+        "$x17": UC_ARM64_REG_X17,
+        "$x18": UC_ARM64_REG_X18,
+        "$x19": UC_ARM64_REG_X19,
+        "$x20": UC_ARM64_REG_X20,
+        "$x21": UC_ARM64_REG_X21,
+        "$x22": UC_ARM64_REG_X22,
+        "$x23": UC_ARM64_REG_X23,
+        "$x24": UC_ARM64_REG_X24,
+        "$x25": UC_ARM64_REG_X25,
+        "$x26": UC_ARM64_REG_X26,
+        "$x27": UC_ARM64_REG_X27,
+        "$x28": UC_ARM64_REG_X28,
+        "$x29": UC_ARM64_REG_X29,
+        "$x30": UC_ARM64_REG_X30,
+        "$sp": UC_ARM64_REG_SP,
+        "$pc": UC_ARM64_REG_PC,
+        "$cpsr": UC_ARM64_REG_CPSR,
+        "$fpsr": UC_ARM64_REG_FPSR,
+        "$fpcr": UC_ARM64_REG_FPCR,
+        "$fp": UC_ARM64_REG_FP,
+    }
     return_register = "$x0"
     flag_register = "$cpsr"
     flags_table = {
@@ -710,11 +657,6 @@ class PowerPC(Architecture):
         return ";".join(insns)
 
 
-class PowerPC64(PowerPC):
-    arch = "PPC"
-    mode = "PPC64"
-
-
 class SPARC(Architecture):
     """ Refs:
     - http://www.cse.scu.edu/~atkinson/teaching/sp05/259/sparc.pdf
@@ -885,12 +827,44 @@ class MIPS(Architecture):
     mode = "MIPS32"
 
     # http://vhouten.home.xs4all.nl/mipsel/r3000-isa.html
-    all_registers = [
-        "$zero", "$at", "$v0", "$v1", "$a0", "$a1", "$a2", "$a3",
-        "$t0", "$t1", "$t2", "$t3", "$t4", "$t5", "$t6", "$t7",
-        "$s0", "$s1", "$s2", "$s3", "$s4", "$s5", "$s6", "$s7",
-        "$t8", "$t9", "$k0", "$k1", "$s8", "$pc", "$sp", "$hi",
-        "$lo", "$fir", "$ra", "$gp", ]
+    all_registers = {
+        "$zero": UC_MIPS_REG_ZERO,
+        "$at": UC_MIPS_REG_AT,
+        "$v0": UC_MIPS_REG_V0,
+        "$v1": UC_MIPS_REG_V1,
+        "$a0": UC_MIPS_REG_A0,
+        "$a1": UC_MIPS_REG_A1,
+        "$a2": UC_MIPS_REG_A2,
+        "$a3": UC_MIPS_REG_A3,
+        "$t0": UC_MIPS_REG_T0,
+        "$t1": UC_MIPS_REG_T1,
+        "$t2": UC_MIPS_REG_T2,
+        "$t3": UC_MIPS_REG_T3,
+        "$t4": UC_MIPS_REG_T4,
+        "$t5": UC_MIPS_REG_T5,
+        "$t6": UC_MIPS_REG_T6,
+        "$t7": UC_MIPS_REG_T7,
+        "$t8": UC_MIPS_REG_T8,
+        "$t9": UC_MIPS_REG_T9,
+        "$s0": UC_MIPS_REG_S0,
+        "$s1": UC_MIPS_REG_S1,
+        "$s2": UC_MIPS_REG_S2,
+        "$s3": UC_MIPS_REG_S3,
+        "$s4": UC_MIPS_REG_S4,
+        "$s5": UC_MIPS_REG_S5,
+        "$s6": UC_MIPS_REG_S6,
+        "$s7": UC_MIPS_REG_S7,
+        "$s8": UC_MIPS_REG_S8,
+        "$k0": UC_MIPS_REG_K0,
+        "$k1": UC_MIPS_REG_K1,
+        "$pc": UC_MIPS_REG_PC,
+        "$sp": UC_MIPS_REG_SP,
+        "$hi": UC_MIPS_REG_HI,
+        "$lo": UC_MIPS_REG_LO,
+        "$ra": UC_MIPS_REG_RA,
+        "$gp": UC_MIPS_REG_GP,
+        "$fp": UC_MIPS_REG_FP,
+    }
     instruction_length = 4
     nop_insn = b"\x00\x00\x00\x00"  # sll $0,$0,0
     return_register = "$v0"
@@ -970,5 +944,4 @@ arch_to_regs = {
     'arm': ARM,
     'aarch64': AARCH64,
     'powerpc': PowerPC,
-    'riscv': RISCV,
 }

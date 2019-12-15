@@ -8,8 +8,8 @@ directory = path.abspath(directory)
 
 sys.path.append(directory)
 
-from unigdb.gdbu import CoreShell
 import unigdb
+from unigdb.gdbu import CoreShell
 
 
 if __name__ == '__main__':

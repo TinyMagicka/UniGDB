@@ -53,10 +53,6 @@ class GenericCommand:
     def _syntax_(self):
         pass
 
-    # @abc.abstractproperty
-    # def _aliases_(self):
-    #     return []
-
     @abc.abstractproperty
     def _example_(self):
         return ""

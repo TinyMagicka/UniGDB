@@ -8,8 +8,7 @@ import struct
 # import unigdb.events
 # import unigdb.proc
 import unigdb.typeinfo
-
-import unigdb.gdbu as gdbu
+import unigdb.arch
 
 PAGE_SIZE = 0x1000
 PAGE_MASK = ~(PAGE_SIZE - 1)
@@ -37,7 +36,7 @@ def read(addr, count):
     result = b''
     count = max(int(count), 0)
 
-    result = gdbu.UC.mem_read(addr, count)
+    result = unigdb.arch.UC.mem_read(addr, count)
     return bytearray(result)
 
 
@@ -69,7 +68,7 @@ def write(addr, data):
     if isinstance(data, str):
         data = bytearray(data)
 
-    gdbu.UC.mem_write(addr, data)
+    unigdb.arch.UC.mem_write(addr, data)
 
 
 def peek(address):

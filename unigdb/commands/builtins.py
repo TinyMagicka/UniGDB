@@ -1,9 +1,31 @@
+from unicorn import UcError
 import os
 
+import unigdb.arch
 import unigdb.memory
 import unigdb.commands
 from unigdb.color import message
 from unigdb.commands import GenericCommand
+
+
+@unigdb.commands.register_command
+class RunCommand(GenericCommand):
+    """Start debugged code."""
+
+    _cmdline_ = "run"
+    _syntax_ = "{:s}".format(_cmdline_)
+
+    def __init__(self):
+        super(RunCommand, self).__init__()
+
+    def do_xxx(self, arg):
+        reg_pc = unigdb.regs.get_register('$pc')
+        # emulate machine code in infinite time
+        try:
+            unigdb.arch.UC.emu_start(begin=reg_pc, until=reg_pc + 0x10000)
+        except UcError as e:
+            message.error('{!} Error => %s' % e)
+            return None
 
 
 @unigdb.commands.register_command
