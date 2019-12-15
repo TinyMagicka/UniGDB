@@ -1,40 +1,28 @@
-from unicorn import *
+import unicorn
 import sys
 
-import pwngef.events
-import pwngef.typeinfo
-import pwngef.regs
+import unigdb.events
+import unigdb.typeinfo
+import unigdb.regs
 
 current = 'i386'
 ptrmask = 0xfffffffff
 endian = 'little'
-ptrsize = pwngef.typeinfo.ptrsize
+ptrsize = unigdb.typeinfo.ptrsize
 fmt = '=I'
 native_endian = str(sys.byteorder)
 CURRENT_ARCH = None
 UC = None
+alive = False
 
 
-def fix_arch(arch):
-    arches = ['x86-64', 'i386', 'mips', 'powerpc', 'sparc', 'arm', 'aarch64', arch]
-    return next(a for a in arches if a in arch)
-
-
-@pwngef.events.new_objfile
-def update(event=None):
+def update(arch, endian):
     m = sys.modules[__name__]
-    try:
-        m.current = fix_arch(gdb.newest_frame().architecture().name())
-    except Exception:
-        return
+    m.current = arch
+    m.ptrsize = unigdb.typeinfo.ptrsize
+    m.ptrmask = (1 << 8 * unigdb.typeinfo.ptrsize) - 1
 
-    m.ptrsize = pwngef.typeinfo.ptrsize
-    m.ptrmask = (1 << 8 * pwngef.typeinfo.ptrsize) - 1
-
-    if 'little' in gdb.execute('show endian', to_string=True).lower():
-        m.endian = 'little'
-    else:
-        m.endian = 'big'
+    m.endian = endian
 
     m.fmt = {
         (4, 'little'): '<I',
@@ -44,7 +32,7 @@ def update(event=None):
     }.get((m.ptrsize, m.endian))
 
     # Work around Python 2.7.6 struct.pack / unicode incompatibility
-    # See https://github.com/pwngef/pwngef/pull/336 for more information.
+    # See https://github.com/unigdb/unigdb/pull/336 for more information.
     m.fmt = str(m.fmt)
 
     # Attempt to detect the qemu-user binary name
@@ -58,32 +46,27 @@ def update(event=None):
 
 
 def set_arch(arch=None, default=None):
-    """Sets the current architecture.
-    If an arch is explicitly specified, use that one, otherwise try to parse it
-    out of the ELF header. If that fails, and default is specified, select and
-    set that arch.
-    Return the selected arch, or raise an OSError.
-    """
+    """Sets the current architecture."""
     module = sys.modules[__name__]
     if arch:
         try:
-            module.CURRENT_ARCH = pwngef.regs.arch_to_regs[arch]()
+            module.CURRENT_ARCH = unigdb.regs.arch_to_regs[arch]()
             uc_arch = getattr(unicorn, 'UC_ARCH_%s' % module.CURRENT_ARCH.arch)
-            uc_mode = getattr(unicorn, 'UC_MODE_%s' % module.CURRENT_ARCH.arch)
+            uc_mode = getattr(unicorn, 'UC_MODE_%s' % module.CURRENT_ARCH.mode)
             if module.endian == 'little':
-                uc_mode += UC_MODE_LITTLE_ENDIAN
+                uc_mode += unicorn.UC_MODE_LITTLE_ENDIAN
             else:
-                uc_mode += UC_MODE_BIG_ENDIAN
-            module.UC = Uc(uc_arch, uc_mode)
+                uc_mode += unicorn.UC_MODE_BIG_ENDIAN
+            module.UC = unicorn.Uc(uc_arch, uc_mode)
             return module.CURRENT_ARCH
         except KeyError:
             raise OSError("Specified arch {:s} is not supported".format(arch))
     try:
-        module.CURRENT_ARCH = pwngef.regs.arch_to_regs[module.current]()
+        module.CURRENT_ARCH = unigdb.regs.arch_to_regs[module.current]()
     except KeyError:
         if default:
             try:
-                module.CURRENT_ARCH = pwngef.regs.arch_to_regs[default.upper()]()
+                module.CURRENT_ARCH = unigdb.regs.arch_to_regs[default.upper()]()
             except KeyError:
                 raise OSError("CPU not supported, neither is default {:s}".format(default))
         else:
