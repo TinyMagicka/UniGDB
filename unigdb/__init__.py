@@ -1,15 +1,15 @@
 # import unigdb.arch
 import unigdb.color
 import unigdb.commands
-# import unigdb.commands.context
+import unigdb.commands.context
 # import unigdb.commands.heap
 # import unigdb.commands.hexdump
 import unigdb.commands.builtins
 # import unigdb.commands.next
 # import unigdb.commands.pattern
 # import unigdb.commands.pcustom
-# import unigdb.commands.registers
-# import unigdb.commands.theme
+import unigdb.commands.registers
+import unigdb.commands.theme
 # import unigdb.commands.self
 import unigdb.disassemble
 # import unigdb.exception
@@ -22,6 +22,7 @@ import unigdb.regs
 import unigdb.typeinfo
 import unigdb.ui
 import unigdb.gdbu
+import capstone
 
 
 __version__ = '0.1.0'
@@ -33,7 +34,7 @@ __all__ = [
     'chain',
     'color',
     'events',
-    # 'heap',
+    'commands',
     'hexdump',
     # 'ida',
     'memoize',

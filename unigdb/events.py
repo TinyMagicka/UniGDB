@@ -19,7 +19,8 @@
 
 
 def hook_code(uc, address, size, user_data):
-    pass
+    print(address)
+    uc.emu_stop()
 
 
 def hook_mem_access(uc, access, address, size, value, user_data):

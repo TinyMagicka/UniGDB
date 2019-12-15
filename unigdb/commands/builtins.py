@@ -4,6 +4,7 @@ import cmd2
 import argparse
 
 import unigdb.arch
+import unigdb.proc
 import unigdb.memory
 import unigdb.events
 import unigdb.commands
@@ -18,20 +19,17 @@ class RunCommand(GenericCommand):
     _cmdline_ = "run"
 
     def __init__(self, cls):
-        super(RunCommand, self).__init__()
-        self.statement_parser = cls.statement_parser
-        self.cls = cls
+        super(RunCommand, self).__init__(cls)
 
     def do_run(self, arg):
         reg_pc = unigdb.regs.get_register('$pc')
-        unigdb.arch.UC.hook_add(UC_HOOK_CODE, unigdb.events.hook_code)
-        unigdb.arch.UC.hook_add(UC_HOOK_BLOCK, unigdb.events.hook_block)
-        unigdb.arch.UC.hook_add(UC_HOOK_INTR, unigdb.events.hook_intr)
-        # unigdb.arch.UC.mem_map()
+        unigdb.arch.UC.hook_add(UC_HOOK_CODE, self.cls.hook_code)
+        unigdb.arch.UC.hook_add(UC_HOOK_BLOCK, self.cls.hook_block)
+        unigdb.arch.UC.hook_add(UC_HOOK_INTR, self.cls.hook_intr)
         # emulate machine code in infinite time
         try:
             unigdb.arch.UC.emu_start(begin=reg_pc, until=reg_pc + 0x10000)
-            unigdb.arch.alive = True
+            unigdb.proc.alive = True
         except UcError as e:
             message.error('{!} Error => %s' % e)
             return None
@@ -44,9 +42,7 @@ class LoadCommand(GenericCommand):
     _cmdline_ = "load"
 
     def __init__(self, cls):
-        super(LoadCommand, self).__init__()
-        self.statement_parser = cls.statement_parser
-        self.cls = cls
+        super(LoadCommand, self).__init__(cls)
 
     load_parser = cmd2.Cmd2ArgumentParser(description=Color.yellowify(__doc__), add_help=False)
     load_parser.add_argument('file', metavar='FILE', completer_method=cmd2.Cmd.path_complete, help='Path to file for load in memory')

@@ -4,6 +4,7 @@ Reading, writing, and describing memory.
 import os
 import struct
 import re
+from unicorn import UcError
 
 # import unigdb.events
 import unigdb.proc
@@ -44,8 +45,10 @@ def read(addr, count: int):
         or ``None``.
     """
     result = b''
-
-    result = unigdb.arch.UC.mem_read(addr, count)
+    try:
+        result = unigdb.arch.UC.mem_read(addr, count)
+    except UcError:
+        result = b''
     return bytearray(result)
 
 
@@ -166,7 +169,7 @@ def string(addr, max=4096):
     Returns:
         An empty bytearray, or a NULL-terminated bytearray.
     """
-    data = bytearray(read(addr, max, partial=True))
+    data = bytearray(read(addr, max))
 
     if b'\x00' in data:
         return data.split(b'\x00')[0]

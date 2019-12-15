@@ -1,11 +1,9 @@
 import abc
 import sys
 import re
-import cmd2
 import binascii
 
 from unigdb.color import Color
-from unigdb.color import message
 import unigdb.config
 
 __commands__ = []
@@ -30,9 +28,11 @@ class GenericCommand:
 
     _aliases_ = []
 
-    def __init__(self):
+    def __init__(self, cls):
         syntax = 'Usage: %s\n\n' % self._cmdline_
         self.__doc__ = syntax + Color.yellowify(self.__doc__.replace(" " * 4, "")) + '\n'
+        self.statement_parser = cls.statement_parser
+        self.cls = cls
 
     @abc.abstractmethod
     def help_xxx(self):
@@ -72,19 +72,3 @@ class GenericCommand:
     def del_setting(self, name):
         key = self.__get_setting_name(name)
         return unigdb.config.delete(key)
-
-
-def parse_arguments(arg_line):
-    # for reg in re.findall(r'[$@][a-z0-9]+', arg_line):
-    #     arg_line.replace(reg, unigdb.regs.get_register(reg), 1)
-    args = re.findall(r'[\"\'].*?[\"\']|[^ ]+', arg_line)
-    # replace quotes
-    args = list(map(lambda x: re.sub(r'[\"\']', '', x), args))
-    result = []
-    for item in args:
-        if '\\x' in item:
-            item = binascii.unhexlify(item.replace('\\x', ''))
-            result.append(item)
-        else:
-            result.append(item)
-    return result

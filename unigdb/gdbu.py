@@ -1,10 +1,12 @@
 import cmd2
 import argparse
 import re
+import binascii
 
 import unigdb.commands
 import unigdb.prompt
 import unigdb.regs
+import unigdb.proc
 
 
 class CoreShell(cmd2.Cmd):
@@ -23,7 +25,12 @@ class CoreShell(cmd2.Cmd):
             self.register_cmd_class(cmdClass(self))
 
         self.aliases['q'] = 'quit'
+        # Set enviroment variables
+        self.mapping_size = 2 * 1024 * 1024 * 1024
+        self.mapping = 0x100000
         self.settable.update({'arch': 'Target architecrute'})
+        self.settable.update({'mapping': 'Memory start map address'})
+        self.settable.update({'mapping_size': 'Memory mapping size in bytes'})
 
         # remove unneeded commands
         del cmd2.Cmd.do_shortcuts
@@ -36,11 +43,14 @@ class CoreShell(cmd2.Cmd):
         self.async_update_prompt(unigdb.prompt.set_prompt())
 
     def register_cmd_class(self, cls):
-        for name in [cls._cmdline_] + cls._aliases_:
-            setattr(CoreShell, 'do_%s' % name, getattr(cls, 'do_%s' % name))
-            setattr(CoreShell, 'help_%s' % name, cls.help_xxx)
-            if hasattr(cls, 'complete_%s' % name):
-                setattr(CoreShell, 'complete_%s' % name, getattr(cls, 'complete_%s' % name))
+        name = cls._cmdline_
+        setattr(CoreShell, 'do_%s' % name, getattr(cls, 'do_%s' % name))
+        setattr(CoreShell, 'help_%s' % name, cls.help_xxx)
+        if hasattr(cls, 'complete_%s' % name):
+            setattr(CoreShell, 'complete_%s' % name, getattr(cls, 'complete_%s' % name))
+        # Set aliases
+        for item in cls._aliases_:
+            self.aliases[item] = name
 
     def do_quit(self, arg):
         return True
@@ -82,7 +92,7 @@ class CoreShell(cmd2.Cmd):
 
         # Set register value
         if param.startswith('$'):
-            value = int(args.value[0])
+            value = parse_and_eval(args.value[0])
             return unigdb.regs.set_register(param, value)
 
         # Parse set memory value
@@ -91,15 +101,18 @@ class CoreShell(cmd2.Cmd):
             var_type = matches.group(1)
             address = matches.group(2)
             address = parse_and_eval(address)
-            value = parse_and_eval(args.value[0])
+            value = args.value[0]
+            if var_type == '{str}':
+                return unigdb.memory.write(address, value)
+            elif var_type == '{hex}':
+                return unigdb.memory.write(address, binascii.unhexlify(value))
+            value = parse_and_eval(value)
             if var_type == '{int}':
-                unigdb.memory.write_int(address, value)
+                return unigdb.memory.write_int(address, value)
             elif var_type == '{byte}':
-                unigdb.memory.write_byte(address, value)
+                return unigdb.memory.write_byte(address, value)
             elif var_type == '{word}':
-                unigdb.memory.write_short(address, value)
-            elif var_type == '{str}':
-                unigdb.memory.write(address, value)
+                return unigdb.memory.write_short(address, value)
             else:
                 self.perror('Unknown type: %s' % var_type)
             return None
@@ -112,7 +125,11 @@ class CoreShell(cmd2.Cmd):
             return None
         else:
             orig_value = getattr(self, param)
-            setattr(self, param, cmd2.utils.cast(orig_value, args.value[0]))
+            if unigdb.memory.number_matcher(args.value[0]):
+                value = int(args.value[0]) if args.value[0].isdigit() else int(args.value[0], 16)
+            else:
+                value = args.value[0]
+            setattr(self, param, cmd2.utils.cast(orig_value, value))
 
     show_parser = cmd2.Cmd2ArgumentParser(add_help=False)
     show_parser.add_argument('-a', '--all', action='store_true', help='display read-only settings as well')
@@ -127,16 +144,29 @@ class CoreShell(cmd2.Cmd):
         param = cmd2.utils.norm_fold(args.param.strip())
         return self._show(args, param)
 
+    def do_map(self, args):
+        unigdb.arch.UC.mem_map(self.mapping, self.mapping_size)
 
-def parse_and_eval(expr):
-    expr = expr.lower()
+    def hook_code(self, uc, address, size, user_data):
+        uc.emu_stop()
+        self.do_context()
+
+    def hook_block(self, uc, address, size, user_data):
+        pass
+
+    def hook_intr(self, uc, except_idx, user_data):
+        pass
+
+
+def parse_and_eval(expression):
+    expr = expression.lower()
     # Parse brackets
     # print('start', expr)
     brackets = re.findall(r'\(.*\)', expr[1:-1] if expr[0] == '(' and expr[-1] == ')' else expr)
     for b in brackets:
         result = parse_and_eval(b)
         expr = expr.replace(b, str(result), 1)
-    # print('bra',expr)
+    # print('bra', expr)
     # Parse registers
     regs = re.findall(r'\$[\w]+', expr)
     for r in regs:
@@ -146,7 +176,7 @@ def parse_and_eval(expr):
             expr = expr.replace(r, str(reg_value), 1)
         else:
             break
-    # print('reg',expr)
+    # print('reg', expr)
     # Parse pointers
     pointers = re.findall(r'\*0x[\da-f]+|\*\d+', expr)
     for p in pointers:
@@ -154,5 +184,8 @@ def parse_and_eval(expr):
         pointer_value = unigdb.memory.uint(addr)
         # pointer_value = arr.get(addr)
         expr = expr.replace(p, str(pointer_value), 1)
-    # print('poi',expr)
-    return eval(expr)
+    # print('poi', expr)
+    try:
+        return eval(expr)
+    except Exception:
+        return expression
