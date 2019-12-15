@@ -6,7 +6,7 @@ import struct
 import re
 
 # import unigdb.events
-# import unigdb.proc
+import unigdb.proc
 import unigdb.typeinfo
 import unigdb.arch
 from unigdb.color import message
@@ -30,7 +30,8 @@ def pack(fmt, data):
     return struct.pack(e + fmt, data)
 
 
-def read(addr, count):
+@unigdb.proc.OnlyWhenInit
+def read(addr, count: int):
     """read(addr, count, partial=False) -> bytearray
 
     Read memory from the program being debugged.
@@ -43,7 +44,6 @@ def read(addr, count):
         or ``None``.
     """
     result = b''
-    count = max(int(count), 0)
 
     result = unigdb.arch.UC.mem_read(addr, count)
     return bytearray(result)
@@ -65,6 +65,7 @@ def readtype(gdb_type, addr):
     return unpack(gdb_type['fmt'], read(addr, gdb_type['size']))
 
 
+@unigdb.proc.OnlyWhenInit
 def write(addr, data):
     """write(addr, data)
 

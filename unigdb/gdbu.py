@@ -1,5 +1,6 @@
 import cmd2
 import argparse
+import re
 
 import unigdb.commands
 import unigdb.prompt
@@ -70,43 +71,88 @@ class CoreShell(cmd2.Cmd):
             self.perror('Valid values: {}'.format(txt))
 
     set_parser = cmd2.Cmd2ArgumentParser(add_help=False)
-    set_parser.add_argument('type', nargs=argparse.OPTIONAL, help='type of value')
     set_parser.add_argument('param', help='parameter to set or view',
-                            choices_method=cmd2.Cmd._get_settable_completion_items, descriptive_header='Description')
+                            choices_method=cmd2.Cmd._get_settable_completion_items)
     set_parser.add_argument('value', nargs='+', help='the new value for settable')
 
     @cmd2.with_argparser(set_parser)
     def do_set(self, args: argparse.Namespace) -> None:
         """Set a settable parameter or show current settings of parameters"""
         param = cmd2.utils.norm_fold(args.param.strip())
+
+        # Set register value
+        if param.startswith('$'):
+            value = int(args.value[0])
+            return unigdb.regs.set_register(param, value)
+
+        # Parse set memory value
+        matches = re.match(r'(\{[a-z]+\})?([^a-z].*)', param)
+        if matches:
+            var_type = matches.group(1)
+            address = matches.group(2)
+            address = parse_and_eval(address)
+            value = parse_and_eval(args.value[0])
+            if var_type == '{int}':
+                unigdb.memory.write_int(address, value)
+            elif var_type == '{byte}':
+                unigdb.memory.write_byte(address, value)
+            elif var_type == '{word}':
+                unigdb.memory.write_short(address, value)
+            elif var_type == '{str}':
+                unigdb.memory.write(address, value)
+            else:
+                self.perror('Unknown type: %s' % var_type)
+            return None
+
         # Check if param points to just one settable
-        print(args)
         if param not in self.settable:
             hits = [p for p in self.settable if p.startswith(param)]
-            self.pwarning('Ambiguous set command "{}": {}'.format(param, ', '.join(hits)))
+            if hits:
+                self.pwarning('Ambiguous set command "{}": {}'.format(param, ', '.join(hits)))
+            return None
+        else:
+            orig_value = getattr(self, param)
+            setattr(self, param, cmd2.utils.cast(orig_value, args.value[0]))
 
-        if args.type is None:
-            args.type = '{int}'
+    show_parser = cmd2.Cmd2ArgumentParser(add_help=False)
+    show_parser.add_argument('-a', '--all', action='store_true', help='display read-only settings as well')
+    show_parser.add_argument('-l', '--long', action='store_true', help='describe function of parameter')
+    show_parser.add_argument('param', help='parameter to set or view', nargs=argparse.OPTIONAL,
+                             choices_method=cmd2.Cmd._get_settable_completion_items)
 
-        if param == 'reg':
-            reg, value = args.value
-            unigdb.regs.set_register(reg, int(value))
-        elif param.startswith('$'):
-            value = int(args.value[0])
-            unigdb.regs.set_register(param, value)
-        elif param.startswith('0x'):
-            try:
-                address = int(param, 16)
-            except ValueError:
-                self.perror('Invalid number: %s' % param)
-                return None
-            if args.type == '{int}':
-                unigdb.memory.write_int(address, args.value[0])
-            elif args.type == '{byte}':
-                unigdb.memory.write_byte(address, args.value[0])
-            elif args.type == '{word}':
-                unigdb.memory.write_short(address, args.value[0])
-            elif args.type == '{str}':
-                unigdb.memory.write(address, args.value[0])
-            else:
-                self.perror('Unknown type: %s' % args.type)
+    @cmd2.with_argparser(show_parser)
+    def do_show(self, args: argparse.Namespace) -> None:
+        if not args.param:
+            return self._show(args)
+        param = cmd2.utils.norm_fold(args.param.strip())
+        return self._show(args, param)
+
+
+def parse_and_eval(expr):
+    expr = expr.lower()
+    # Parse brackets
+    # print('start', expr)
+    brackets = re.findall(r'\(.*\)', expr[1:-1] if expr[0] == '(' and expr[-1] == ')' else expr)
+    for b in brackets:
+        result = parse_and_eval(b)
+        expr = expr.replace(b, str(result), 1)
+    # print('bra',expr)
+    # Parse registers
+    regs = re.findall(r'\$[\w]+', expr)
+    for r in regs:
+        reg_value = unigdb.regs.get_register(r)
+        # reg_value = arr.get(r)
+        if reg_value:
+            expr = expr.replace(r, str(reg_value), 1)
+        else:
+            break
+    # print('reg',expr)
+    # Parse pointers
+    pointers = re.findall(r'\*0x[\da-f]+|\*\d+', expr)
+    for p in pointers:
+        addr = int(p[1:]) if p[1:].isdigit() else int(p[1:], 16)
+        pointer_value = unigdb.memory.uint(addr)
+        # pointer_value = arr.get(addr)
+        expr = expr.replace(p, str(pointer_value), 1)
+    # print('poi',expr)
+    return eval(expr)

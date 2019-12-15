@@ -4,6 +4,7 @@ import sys
 import unigdb.events
 import unigdb.typeinfo
 import unigdb.regs
+import unigdb.proc
 
 current = 'i386'
 ptrmask = 0xfffffffff
@@ -13,7 +14,6 @@ fmt = '=I'
 native_endian = str(sys.byteorder)
 CURRENT_ARCH = None
 UC = None
-alive = False
 
 
 def update(arch, endian):
@@ -58,6 +58,7 @@ def set_arch(arch=None, default=None):
             else:
                 uc_mode += unicorn.UC_MODE_BIG_ENDIAN
             module.UC = unicorn.Uc(uc_arch, uc_mode)
+            unigdb.proc.init = True
             return module.CURRENT_ARCH
         except KeyError:
             raise OSError("Specified arch {:s} is not supported".format(arch))
@@ -66,7 +67,7 @@ def set_arch(arch=None, default=None):
     except KeyError:
         if default:
             try:
-                module.CURRENT_ARCH = unigdb.regs.arch_to_regs[default.upper()]()
+                module.CURRENT_ARCH = unigdb.regs.arch_to_regs[default.lower()]()
             except KeyError:
                 raise OSError("CPU not supported, neither is default {:s}".format(default))
         else:

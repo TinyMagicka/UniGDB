@@ -21,17 +21,22 @@ from unicorn.mips_const import UC_MIPS_REG_ZERO, UC_MIPS_REG_AT, UC_MIPS_REG_V0,
 
 from unigdb.color import Color, message
 import unigdb.arch
+import unigdb.proc
 from unigdb.chain import lazy_dereference
 
 
-# @unigdb.proc.OnlyWhenRunning
+@unigdb.proc.OnlyWhenInit
 def get_register(name):
     if name.startswith('$'):
         name = name[1:]
-    uc_reg = unigdb.arch.CURRENT_ARCH.all_registers['$' + name]
+    uc_reg = unigdb.arch.CURRENT_ARCH.all_registers.get('$' + name)
+    if not uc_reg:
+        message.error('Register "%s" not found' % name)
+        return None
     return unigdb.arch.UC.reg_read(uc_reg)
 
 
+@unigdb.proc.OnlyWhenInit
 def set_register(name, value: int):
     if name.startswith('$'):
         name = name[1:]
@@ -184,7 +189,7 @@ class ARM(Architecture):
 
     def is_thumb(self):
         """Determine if the machine is currently in THUMB mode."""
-        return unigdb.arch.alive and get_register("$cpsr") & (1 << 5)
+        return unigdb.proc.alive and get_register("$cpsr") & (1 << 5)
 
     @property
     def pc(self):

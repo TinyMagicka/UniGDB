@@ -16,7 +16,7 @@ import unigdb.disassemble
 # import unigdb.functions
 # import unigdb.handlers
 import unigdb.memory
-# import unigdb.proc
+import unigdb.proc
 import unigdb.prompt
 import unigdb.regs
 import unigdb.typeinfo
