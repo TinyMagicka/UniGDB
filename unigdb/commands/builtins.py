@@ -10,6 +10,7 @@ import unigdb.events
 import unigdb.commands
 from unigdb.color import message, Color
 from unigdb.commands import GenericCommand
+from unigdb.commands.breakpoint import setBreakpoint
 
 
 @unigdb.commands.register_command
@@ -28,8 +29,9 @@ class RunCommand(GenericCommand):
         unigdb.arch.UC.hook_add(UC_HOOK_INTR, self.cls.hook_intr)
         # emulate machine code in infinite time
         try:
-            unigdb.arch.UC.emu_start(begin=reg_pc, until=reg_pc + 0x10000)
+            setBreakpoint(reg_pc, temporary=True)
             unigdb.proc.alive = True
+            unigdb.arch.UC.emu_start(begin=reg_pc, until=reg_pc + 0x10000)
         except UcError as e:
             message.error('{!} Error => %s' % e)
             return None

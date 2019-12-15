@@ -2,10 +2,10 @@
 import unigdb.color
 import unigdb.commands
 import unigdb.commands.context
-# import unigdb.commands.heap
+import unigdb.commands.breakpoint
 # import unigdb.commands.hexdump
 import unigdb.commands.builtins
-# import unigdb.commands.next
+import unigdb.commands.nexti
 # import unigdb.commands.pattern
 # import unigdb.commands.pcustom
 import unigdb.commands.registers

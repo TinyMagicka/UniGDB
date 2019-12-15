@@ -1,7 +1,6 @@
 import sys
 import os
 import re
-import collections
 import argparse
 import cmd2
 
@@ -58,7 +57,7 @@ class ContextCommand(GenericCommand):
         self.add_setting("nb_lines_code_prev", 3, "Number of instruction before $pc")
         self.add_setting("ignore_registers", "", "Space-separated list of registers not to display (e.g. '$cs $ds $gs')")
         self.add_setting("clear_screen", False, "Clear the screen before printing the context")
-        self.add_setting("layout", "legend regs code stack args source memory threads trace extra", "Change the order/presence of the context sections")
+        self.add_setting("layout", "legend regs code stack args memory trace extra", "Change the order/presence of the context sections")
         self.add_setting("redirect", "", "Redirect the context information to another TTY")
 
         self.layout_mapping = {
@@ -68,9 +67,7 @@ class ContextCommand(GenericCommand):
             "code": self.context_code,
             "args": self.context_args,
             "memory": self.context_memory,
-            "source": self.context_source,
             "trace": self.context_trace,
-            "threads": self.context_threads,
             "extra": self.context_additional_information,
         }
         return None
@@ -98,21 +95,13 @@ class ContextCommand(GenericCommand):
         return None
 
     context_parser = argparse.ArgumentParser(description=Color.yellowify(__doc__), add_help=False)
-    context_parser.add_argument('subcommand', nargs='*', choices=[
-        'legend', 'regs', 'stack',
-        'code', 'args', 'memory',
-        'source', 'trace', 'threads',
-        'extra'
-    ])
+    context_parser.add_argument('subcommand', nargs='*', default=['legend', 'regs', 'code'])
 
     @unigdb.proc.OnlyWhenRunning
     @cmd2.with_argparser(context_parser)
     def do_context(self, args: argparse.Namespace):
         if not self.get_setting("enable") or context_hidden:
             return None
-        # if not all(_ in self.layout_mapping for _ in args.subcommand):
-        #     self.help_xxx()
-        #     return None
 
         if len(args.subcommand) > 0:
             current_layout = args.subcommand
@@ -272,7 +261,7 @@ class ContextCommand(GenericCommand):
         return None
 
     def context_args(self):
-        insn = disass.gef_current_instruction(int(unigdb.arch.CURRENT_ARCH.pc))
+        insn = disass.get_current_instruction(int(unigdb.arch.CURRENT_ARCH.pc))
         if not unigdb.arch.CURRENT_ARCH.is_call(insn):
             return None
 
@@ -297,38 +286,7 @@ class ContextCommand(GenericCommand):
                 # it's an address, just use as is
                 target = re.sub(r".*(0x[a-fA-F0-9]*).*", r"\1", ops)
 
-        sym = gdb.lookup_global_symbol(target)
-        if sym is None:
-            self.print_guessed_arguments(target)
-            return None
-
-        if sym.type.code != gdb.TYPE_CODE_FUNC:
-            message.error("Symbol '{}' is not a function: type={}".format(target, sym.type.code))
-            return None
-
-        self.print_arguments_from_symbol(target, sym)
-        return None
-
-    def print_arguments_from_symbol(self, function_name, symbol):
-        """If symbols were found, parse them and print the argument adequately."""
-        args = []
-
-        for i, f in enumerate(symbol.type.fields()):
-            _value = unigdb.arch.CURRENT_ARCH.get_ith_parameter(i)[1]
-            _value = unigdb.chain.format(_value)
-            _name = f.name or "var_{}".format(i)
-            _type = f.type.name or self.size2type[f.type.sizeof]
-            args.append("{} {} = {}".format(_type, _name, _value))
-
-        self.context_title("arguments")
-
-        if not args:
-            print("{} (<void>)".format(function_name))
-            return None
-
-        print("{} (".format(function_name))
-        print("   " + ",\n   ".join(args))
-        print(")")
+        self.print_guessed_arguments(target)
         return None
 
     def print_guessed_arguments(self, function_name):
@@ -394,86 +352,6 @@ class ContextCommand(GenericCommand):
         print(")")
         return None
 
-    def context_source(self):
-        try:
-            pc = unigdb.arch.CURRENT_ARCH.pc
-            symtabline = gdb.find_pc_line(pc)
-            symtab = symtabline.symtab
-            line_num = symtabline.line - 1     # we substract one because line number returned by gdb start at 1
-            if not symtab.is_valid():
-                return None
-
-            fpath = symtab.fullname()
-            with open(fpath, "r") as f:
-                lines = [l.rstrip() for l in f.readlines()]
-
-        except Exception:
-            return None
-
-        nb_line = self.get_setting("nb_lines_code")
-        fn = symtab.filename
-        if len(fn) > 20:
-            fn = "{}[...]{}".format(fn[:15], os.path.splitext(fn)[1])
-        title = "source:{}+{}".format(fn, line_num + 1)
-        cur_line_color = unigdb.config.get("theme.source_current_line")
-        self.context_title(title)
-
-        for i in range(line_num - nb_line + 1, line_num + nb_line):
-            if i < 0:
-                continue
-
-            if i < line_num:
-                print(Color.grayify("   {:4d}\t {:s}".format(i + 1, lines[i],)))
-
-            if i == line_num:
-                extra_info = self.get_pc_context_info(pc, lines[i])
-                prefix = "{}{:4d}\t ".format(config_arrow_right, i + 1)
-                leading = len(lines[i]) - len(lines[i].lstrip())
-                if extra_info:
-                    print("{}{}".format(" " * (len(prefix) + leading), extra_info))
-                print(Color.colorify("{}{:s}".format(prefix, lines[i]), cur_line_color))
-
-            if i > line_num:
-                try:
-                    print("   {:4d}\t {:s}".format(i + 1, lines[i],))
-                except IndexError:
-                    break
-        return None
-
-    def get_pc_context_info(self, pc, line):
-        try:
-            current_block = gdb.block_for_pc(pc)
-            if not current_block.is_valid():
-                return ""
-            m = collections.OrderedDict()
-            while current_block and not current_block.is_static:
-                for sym in current_block:
-                    symbol = sym.name
-                    if not sym.is_function and re.search(r"\W{}\W".format(symbol), line):
-                        val = gdb.parse_and_eval(symbol)
-                        if val.type.code in (gdb.TYPE_CODE_PTR, gdb.TYPE_CODE_ARRAY):
-                            addr = int(val.address)
-                            addrs = unigdb.chain.examine_mem_value(addr)
-                            if len(addrs) > 2:
-                                addrs = [addrs[0], "[...]", addrs[-1]]
-
-                            f = " {:s} ".format(config_arrow_right)
-                            val = f.join(addrs)
-                        elif val.type.code == gdb.TYPE_CODE_INT:
-                            val = hex(int(val))
-                        else:
-                            continue
-
-                        if symbol not in m:
-                            m[symbol] = val
-                current_block = current_block.superblock
-
-            if m:
-                return "// " + ", ".join(["{}={}".format(Color.yellowify(a), b) for a, b in m.items()])
-        except Exception:
-            pass
-        return ""
-
     def context_trace(self):
         self.context_title("trace")
 
@@ -523,55 +401,6 @@ class ContextCommand(GenericCommand):
         orig_frame.select()
         return None
 
-    def context_threads(self):
-        def reason():
-            res = gdb.execute("info program", to_string=True).splitlines()
-            if not res:
-                return "NOT RUNNING"
-
-            for line in res:
-                line = line.strip()
-                if line.startswith("It stopped with signal "):
-                    return line.replace("It stopped with signal ", "").split(",", 1)[0]
-                if line == "The program being debugged is not being run.":
-                    return "NOT RUNNING"
-                if line == "It stopped at a breakpoint that has since been deleted.":
-                    return "TEMPORARY BREAKPOINT"
-                if line.startswith("It stopped at breakpoint "):
-                    return "BREAKPOINT"
-                if line == "It stopped after being stepped.":
-                    return "SINGLE STEP"
-
-            return "STOPPED"
-
-        self.context_title("threads")
-
-        threads = gdb.selected_inferior().threads()[::-1]
-        idx = self.get_setting("nb_lines_threads")
-        if idx > 0:
-            threads = threads[0:idx]
-
-        if idx == 0:
-            return None
-
-        if not threads:
-            message.error("No thread selected")
-            return None
-
-        for i, thread in enumerate(threads):
-            line = """[{:s}] Id {:d}, Name: "{:s}", """.format(Color.colorify("#{:d}".format(i), "bold pink"),
-                                                               thread.num, thread.name or "")
-            if thread.is_running():
-                line += Color.colorify("running", "bold green")
-            elif thread.is_stopped():
-                line += Color.colorify("stopped", "bold red")
-                line += ", reason: {}".format(Color.colorify(reason(), "bold pink"))
-            elif thread.is_exited():
-                line += Color.colorify("exited", "bold yellow")
-            print(line)
-            i += 1
-        return None
-
     def context_additional_information(self):
         if not __context_messages__:
             return None
@@ -591,7 +420,7 @@ class ContextCommand(GenericCommand):
         global __watches__
         for address, opt in sorted(__watches__.items()):
             self.context_title("memory:{:#x}".format(address))
-            gdb.execute("hexdump {fmt:s} {address:d} {size:d}".format(
+            self.cls.onecmd_plus_hooks("hexdump {fmt:s} {address:d} {size:d}".format(
                 address=address,
                 size=opt[0],
                 fmt=opt[1]

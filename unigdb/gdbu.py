@@ -7,6 +7,7 @@ import unigdb.commands
 import unigdb.prompt
 import unigdb.regs
 import unigdb.proc
+from unigdb.commands.breakpoint import hasBreakpoint, delBreakpoint
 
 
 class CoreShell(cmd2.Cmd):
@@ -148,8 +149,12 @@ class CoreShell(cmd2.Cmd):
         unigdb.arch.UC.mem_map(self.mapping, self.mapping_size)
 
     def hook_code(self, uc, address, size, user_data):
-        uc.emu_stop()
-        self.do_context()
+        has_break = hasBreakpoint(address)
+        if has_break is not None:
+            uc.emu_stop()
+            self.onecmd_plus_hooks('ctx ' + unigdb.config.get('context.layout'))
+            if has_break is True:
+                delBreakpoint(address)
 
     def hook_block(self, uc, address, size, user_data):
         pass
