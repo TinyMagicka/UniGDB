@@ -21,7 +21,7 @@ import unigdb.prompt
 import unigdb.regs
 import unigdb.typeinfo
 import unigdb.ui
-import unigdb.gdbu as gdbu
+import unigdb.gdbu
 
 
 __version__ = '0.1.0'
@@ -29,10 +29,10 @@ version = __version__
 
 
 __all__ = [
-    # 'arch',
+    'arch',
     'chain',
     'color',
-    # 'events',
+    'events',
     # 'heap',
     'hexdump',
     # 'ida',

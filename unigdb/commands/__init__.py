@@ -1,6 +1,7 @@
 import abc
 import sys
 import re
+import cmd2
 import binascii
 
 from unigdb.color import Color
@@ -29,33 +30,17 @@ class GenericCommand:
 
     _aliases_ = []
 
-    def __init__(self, complete=False):
-        syntax = Color.yellowify("\nSyntax: ") + self._syntax_
-        example = Color.yellowify("\nExample: ") + self._example_ if self._example_ else ""
-        self.__doc__ = self.__doc__.replace(" " * 4, "") + syntax + example
-        self.complete = complete
+    def __init__(self):
+        syntax = 'Usage: %s\n\n' % self._cmdline_
+        self.__doc__ = syntax + Color.yellowify(self.__doc__.replace(" " * 4, "")) + '\n'
 
     @abc.abstractmethod
-    def do_xxx(self, arg):
-        pass
-
     def help_xxx(self):
-        message.hint(self.__doc__)
-
-    def complete_xxx(self, text, line, begidx, endidx):
-        pass
+        print(self.__doc__)
 
     @abc.abstractproperty
     def _cmdline_(self):
         pass
-
-    @abc.abstractproperty
-    def _syntax_(self):
-        pass
-
-    @abc.abstractproperty
-    def _example_(self):
-        return ""
 
     def __get_setting_name(self, name):
         def __sanitize_class_name(clsname):
