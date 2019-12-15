@@ -3,22 +3,31 @@ Reading, writing, and describing memory.
 """
 import os
 import struct
+import re
 
-# import unigdb.arch
 # import unigdb.events
 # import unigdb.proc
 import unigdb.typeinfo
 import unigdb.arch
+from unigdb.color import message
 
 PAGE_SIZE = 0x1000
 PAGE_MASK = ~(PAGE_SIZE - 1)
 MMAP_MIN_ADDR = 0x8000
 
 
+def number_matcher(value):
+    return re.match(r'^\d+$|^0x[0-9A-Fa-f]+$', value)
+
+
 def unpack(fmt, data):
     e = '<' if unigdb.arch.endian == 'little' else '>'
-
     return struct.unpack(e + fmt, data)[0]
+
+
+def pack(fmt, data):
+    e = '<' if unigdb.arch.endian == 'little' else '>'
+    return struct.pack(e + fmt, data)
 
 
 def read(addr, count):
@@ -66,9 +75,44 @@ def write(addr, data):
         data(str,bytes,bytearray): Data to write
     """
     if isinstance(data, str):
-        data = bytearray(data)
+        data = data.encode()
+    try:
+        unigdb.arch.UC.mem_write(addr, data)
+    except AttributeError:
+        message.error('{!} Error => Unicorn engine not initialized')
 
-    unigdb.arch.UC.mem_write(addr, data)
+
+def write_int(addr, data):
+    if isinstance(data, int):
+        value = data
+    elif number_matcher(data):
+        value = eval(data)
+    else:
+        message.error('{!} Error => Invalid number: %s' % data)
+        return None
+    write(addr, pack('I', value))
+
+
+def write_short(addr, data):
+    if isinstance(data, int):
+        value = data
+    elif number_matcher(data):
+        value = eval(data)
+    else:
+        message.error('{!} Error => Invalid number: %s' % data)
+        return None
+    write(addr, pack('H', value))
+
+
+def write_byte(addr, data):
+    if isinstance(data, int):
+        value = data
+    elif number_matcher(data):
+        value = eval(data)
+    else:
+        message.error('{!} Error => Invalid number: %s' % data)
+        return None
+    write(addr, pack('B', value))
 
 
 def peek(address):

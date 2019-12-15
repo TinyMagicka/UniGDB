@@ -101,4 +101,12 @@ class CoreShell(cmd2.Cmd):
                 self.perror('Invalid number: %s' % param)
                 return None
             if args.type == '{int}':
-                unigdb.arch.UC.mem_write()
+                unigdb.memory.write_int(address, args.value[0])
+            elif args.type == '{byte}':
+                unigdb.memory.write_byte(address, args.value[0])
+            elif args.type == '{word}':
+                unigdb.memory.write_short(address, args.value[0])
+            elif args.type == '{str}':
+                unigdb.memory.write(address, args.value[0])
+            else:
+                self.perror('Unknown type: %s' % args.type)
