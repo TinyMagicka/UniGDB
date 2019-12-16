@@ -11,6 +11,7 @@ import unigdb.commands
 from unigdb.color import message, Color
 from unigdb.commands import GenericCommand
 from unigdb.commands.breakpoint import setBreakpoint
+from unigdb.gdbu import parse_and_eval
 
 
 @unigdb.commands.register_command
@@ -48,10 +49,11 @@ class LoadCommand(GenericCommand):
 
     load_parser = cmd2.Cmd2ArgumentParser(description=Color.yellowify(__doc__), add_help=False)
     load_parser.add_argument('file', metavar='FILE', completer_method=cmd2.Cmd.path_complete, help='Path to file for load in memory')
-    load_parser.add_argument('offset', metavar='OFFSET', type=int, help='Address in mapped spaces for insert file data')
+    load_parser.add_argument('offset', metavar='OFFSET', help='Address in mapped spaces for insert file data')
 
     @cmd2.with_argparser(load_parser)
     def do_load(self, args: argparse.Namespace):
+        args.offset = parse_and_eval(args.offset)
         if not os.path.exists(args.file):
             message.error('File not found: %s' % args.file)
         data = open(args.file, 'rb').read()
