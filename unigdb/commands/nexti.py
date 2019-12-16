@@ -34,7 +34,7 @@ class NextInstCommand(GenericCommand):
             if unigdb.arch.CURRENT_ARCH.arch == 'MIPS':
                 step_over = unigdb.arch.CURRENT_ARCH.instruction_length * 2
         setBreakpoint(pc + step_over, temporary=True)
-        unigdb.arch.UC.emu_start(begin=pc, until=pc + 100)
         unigdb.proc.alive = True
+        unigdb.arch.UC.emu_start(begin=pc, until=pc + 100)
 
         # gdb.Breakpoint('*%#x' % (pc + 8), internal=True, temporary=True)

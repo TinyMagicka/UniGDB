@@ -7,7 +7,7 @@ import unigdb.commands
 import unigdb.prompt
 import unigdb.regs
 import unigdb.proc
-from unigdb.commands.breakpoint import hasBreakpoint, delBreakpoint
+from unigdb.breakpoints import hasBreakpoint, delBreakpoint
 
 
 class CoreShell(cmd2.Cmd):

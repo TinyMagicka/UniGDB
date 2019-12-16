@@ -58,3 +58,23 @@ class LoadCommand(GenericCommand):
             message.error('File not found: %s' % args.file)
         data = open(args.file, 'rb').read()
         unigdb.memory.write(args.offset, data)
+
+
+@unigdb.commands.register_command
+class ContinueCommand(GenericCommand):
+    """Continue program being debugged, after signal or breakpoint."""
+
+    _cmdline_ = "continue"
+    _aliases_ = ["c", ]
+
+    def __init__(self, cls):
+        super(ContinueCommand, self).__init__(cls)
+
+    con_parser = argparse.ArgumentParser(description=Color.yellowify(__doc__), add_help=False)
+    con_parser.add_argument('n', metavar='N', nargs=argparse.OPTIONAL, help='Step N times')
+
+    @cmd2.with_argparser(con_parser)
+    def do_continue(self, args: argparse.Namespace):
+        pc = int(unigdb.arch.CURRENT_ARCH.pc)
+        unigdb.proc.alive = True
+        unigdb.arch.UC.emu_start(begin=pc, until=pc + 10000)
