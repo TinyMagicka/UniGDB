@@ -1,8 +1,6 @@
 import os
 import sys
-import functools
 import tempfile
-import platform
 import configparser
 import gdb
 
@@ -13,12 +11,6 @@ import unigdb.commands
 import unigdb.functions
 
 __aliases__ = []
-
-
-@functools.lru_cache()
-def get_os():
-    """Return the current OS."""
-    return platform.system().lower()
 
 
 def execute_gdb_script(commands):

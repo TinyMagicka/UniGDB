@@ -2,6 +2,7 @@ from unicorn import *
 import os
 import cmd2
 import argparse
+import binascii
 
 import unigdb.arch
 import unigdb.proc
@@ -19,6 +20,7 @@ class RunCommand(GenericCommand):
     """Start debugged code."""
 
     _cmdline_ = "run"
+    _aliases_ = ["r", ]
 
     def __init__(self, cls):
         super(RunCommand, self).__init__(cls)
@@ -48,16 +50,27 @@ class LoadCommand(GenericCommand):
         super(LoadCommand, self).__init__(cls)
 
     load_parser = cmd2.Cmd2ArgumentParser(description=Color.yellowify(__doc__), add_help=False)
-    load_parser.add_argument('file', metavar='FILE', completer_method=cmd2.Cmd.path_complete, help='Path to file for load in memory')
-    load_parser.add_argument('offset', metavar='OFFSET', help='Address in mapped spaces for insert file data')
+    load_parser.add_argument('code', choices=['code', 'data'],
+                             help='Set $pc if needed')
+    load_parser.add_argument('mode', choices=['binary', 'hex'],
+                             help='File mode (binary file or hex file)')
+    load_parser.add_argument('file', metavar='FILE', completer_method=cmd2.Cmd.path_complete,
+                             help='Path to file for load in memory')
+    load_parser.add_argument('offset', metavar='OFFSET',
+                             help='Address in mapped spaces for insert file data')
 
     @cmd2.with_argparser(load_parser)
     def do_load(self, args: argparse.Namespace):
         args.offset = parse_and_eval(args.offset)
         if not os.path.exists(args.file):
             message.error('File not found: %s' % args.file)
-        data = open(args.file, 'rb').read()
+        if args.mode == 'binary':
+            data = open(args.file, 'rb').read()
+        else:
+            data = binascii.unhexlify(open(args.file).read())
         unigdb.memory.write(args.offset, data)
+        if args.code == 'code':
+            self.cls.do_set('$pc %#08x' % args.offset)
 
 
 @unigdb.commands.register_command

@@ -3,7 +3,7 @@ import unigdb.color
 import unigdb.commands
 import unigdb.commands.context
 import unigdb.commands.breakpoint
-# import unigdb.commands.hexdump
+import unigdb.commands.hexdump
 import unigdb.commands.builtins
 import unigdb.commands.nexti
 # import unigdb.commands.pattern
@@ -25,7 +25,7 @@ import unigdb.gdbu
 import capstone
 
 
-__version__ = '0.1.0'
+__version__ = '0.1.2'
 version = __version__
 
 

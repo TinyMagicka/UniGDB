@@ -2,12 +2,16 @@ import cmd2
 import argparse
 import re
 import binascii
+import sys
+import functools
+import platform
 
 import unigdb.commands
 import unigdb.prompt
 import unigdb.regs
 import unigdb.proc
 from unigdb.breakpoints import hasBreakpoint, delBreakpoint
+from unigdb.color import Color
 
 
 class CoreShell(cmd2.Cmd):
@@ -24,14 +28,15 @@ class CoreShell(cmd2.Cmd):
         # load modules
         for cmdClass in unigdb.commands.__commands__:
             self.register_cmd_class(cmdClass(self))
+        self.intro = initial_message()
 
         self.aliases['q'] = 'quit'
         # Set enviroment variables
         self.mapping_size = 2 * 1024 * 1024 * 1024
         self.mapping = 0x100000
-        self.settable.update({'arch': 'Target architecrute'})
-        self.settable.update({'mapping': 'Memory start map address'})
-        self.settable.update({'mapping_size': 'Memory mapping size in bytes'})
+        self.add_settable(cmd2.Settable('arch', str, 'Target architecrute'))
+        self.add_settable(cmd2.Settable('mapping', int, 'Memory start map address'))
+        self.add_settable(cmd2.Settable('mapping_size', int, 'Memory mapping size in bytes'))
 
         # remove unneeded commands
         del cmd2.Cmd.do_shortcuts
@@ -69,6 +74,7 @@ class CoreShell(cmd2.Cmd):
         if new_val in arches:
             endian = 'little' if new_val.endswith('el') else 'big'
             unigdb.arch.update(new_val[:-2], endian)
+            self.do_map(None)
         else:
             self.perror('Invalid value: {}'.format(new_val))
             txt = ''
@@ -118,32 +124,32 @@ class CoreShell(cmd2.Cmd):
                 self.perror('Unknown type: %s' % var_type)
             return None
 
-        # Check if param points to just one settable
-        if param not in self.settable:
-            hits = [p for p in self.settable if p.startswith(param)]
-            if hits:
-                self.pwarning('Ambiguous set command "{}": {}'.format(param, ', '.join(hits)))
-            return None
-        else:
-            orig_value = getattr(self, param)
-            if unigdb.memory.number_matcher(args.value[0]):
-                value = int(args.value[0]) if args.value[0].isdigit() else int(args.value[0], 16)
-            else:
-                value = args.value[0]
-            setattr(self, param, cmd2.utils.cast(orig_value, value))
+        cmd2.Cmd.do_set(self, '%s %s' % (param, ' '.join(args.value)))
+
+    #     # Check if param points to just one settable
+    #     if param not in self.settable:
+    #         hits = [p for p in self.settable if p.startswith(param)]
+    #         if hits:
+    #             self.pwarning('Ambiguous set command "{}": {}'.format(param, ', '.join(hits)))
+    #         return None
+    #     else:
+    #         orig_value = getattr(self, param)
+    #         if unigdb.memory.number_matcher(args.value[0]):
+    #             value = int(args.value[0]) if args.value[0].isdigit() else int(args.value[0], 16)
+    #         else:
+    #             value = args.value[0]
+    #         setattr(self, param, cmd2.utils.cast(orig_value, value))
 
     show_parser = cmd2.Cmd2ArgumentParser(add_help=False)
-    show_parser.add_argument('-a', '--all', action='store_true', help='display read-only settings as well')
-    show_parser.add_argument('-l', '--long', action='store_true', help='describe function of parameter')
     show_parser.add_argument('param', help='parameter to set or view', nargs=argparse.OPTIONAL,
                              choices_method=cmd2.Cmd._get_settable_completion_items)
 
     @cmd2.with_argparser(show_parser)
     def do_show(self, args: argparse.Namespace) -> None:
         if not args.param:
-            return self._show(args)
+            return cmd2.Cmd.do_set(self, '')
         param = cmd2.utils.norm_fold(args.param.strip())
-        return self._show(args, param)
+        return cmd2.Cmd.do_set(self, param)
 
     def do_map(self, args):
         unigdb.arch.UC.mem_map(self.mapping, self.mapping_size)
@@ -194,3 +200,24 @@ def parse_and_eval(expression):
         return eval(expr)
     except Exception:
         return expression
+
+
+def initial_message():
+    msg = "{:s} for {:s} ready, type `{:s}' to start, `{:s}' to configure\n".format(
+        Color.greenify("UniGDB"), get_os(),
+        Color.colorify("self", "underline yellow"),
+        Color.colorify("self config", "underline pink")
+    )
+    ver = "{:d}.{:d}".format(sys.version_info.major, sys.version_info.minor)
+    nb_cmds = len(unigdb.commands.__commands__)
+    msg += "{:s} commands loaded using Python engine {:s}".format(
+        Color.colorify(nb_cmds, "bold green"),
+        Color.colorify(ver, "bold red"))
+
+    return msg
+
+
+@functools.lru_cache()
+def get_os():
+    """Return the current OS."""
+    return platform.system().lower()

@@ -57,7 +57,7 @@ class ContextCommand(GenericCommand):
         self.add_setting("nb_lines_code_prev", 3, "Number of instruction before $pc")
         self.add_setting("ignore_registers", "", "Space-separated list of registers not to display (e.g. '$cs $ds $gs')")
         self.add_setting("clear_screen", False, "Clear the screen before printing the context")
-        self.add_setting("layout", "legend regs code stack args memory trace extra", "Change the order/presence of the context sections")
+        self.add_setting("layout", "legend regs code stack args memory", "Change the order/presence of the context sections")
         self.add_setting("redirect", "", "Redirect the context information to another TTY")
 
         self.layout_mapping = {
@@ -67,14 +67,11 @@ class ContextCommand(GenericCommand):
             "code": self.context_code,
             "args": self.context_args,
             "memory": self.context_memory,
-            "trace": self.context_trace,
-            "extra": self.context_additional_information,
         }
         return None
 
     def post_load(self):
         unigdb.events.cont(self.update_registers)
-        unigdb.events.cont(self.empty_extra_messages)
         return None
 
     def show_legend(self):
@@ -352,70 +349,6 @@ class ContextCommand(GenericCommand):
         print(")")
         return None
 
-    def context_trace(self):
-        self.context_title("trace")
-
-        nb_backtrace = self.get_setting("nb_lines_backtrace")
-        if nb_backtrace <= 0:
-            return None
-        orig_frame = current_frame = gdb.selected_frame()
-        i = 0
-
-        # backward compat for gdb (gdb < 7.10)
-        if not hasattr(gdb, "FrameDecorator"):
-            gdb.execute("backtrace {:d}".format(nb_backtrace))
-            return None
-
-        while current_frame:
-            current_frame.select()
-            if not current_frame.is_valid():
-                continue
-
-            pc = current_frame.pc()
-            name = current_frame.name()
-            items = []
-            items.append("{:#x}".format(pc))
-            if name:
-                frame_args = gdb.FrameDecorator.FrameDecorator(current_frame).frame_args() or []
-                m = "{}({})".format(Color.greenify(name),
-                                    ", ".join(["{}={!s}".format(Color.yellowify(x.sym),
-                                                                x.sym.value(current_frame)) for x in frame_args]))
-                items.append(m)
-            else:
-                try:
-                    insn = next(disass.gef_disassemble(pc, 1))
-                except Exception:
-                    break
-                items.append(Color.redify("{} {}".format(insn.mnemonic, ", ".join(insn.operands))))
-
-            print("[{}] {}".format(
-                Color.colorify("#{}".format(i), "bold pink"),
-                config_arrow_right.join(items)
-            ))
-            current_frame = current_frame.older()
-            i += 1
-            nb_backtrace -= 1
-            if nb_backtrace == 0:
-                break
-
-        orig_frame.select()
-        return None
-
-    def context_additional_information(self):
-        if not __context_messages__:
-            return None
-        self.context_title("extra")
-        for level, text in __context_messages__:
-            if level == "error":
-                message.error(text)
-            elif level == "warn":
-                message.warn(text)
-            elif level == "success":
-                message.success(text)
-            else:
-                message.notice(text)
-        return None
-
     def context_memory(self):
         global __watches__
         for address, opt in sorted(__watches__.items()):
@@ -433,9 +366,4 @@ class ContextCommand(GenericCommand):
                 cls.old_registers[reg] = unigdb.regs.get_register(reg)
             except Exception:
                 cls.old_registers[reg] = 0
-        return None
-
-    def empty_extra_messages(self, event):
-        global __context_messages__
-        __context_messages__ = []
         return None

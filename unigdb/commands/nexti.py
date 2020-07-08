@@ -21,14 +21,17 @@ class NextInstCommand(GenericCommand):
         super(NextInstCommand, self).__init__(cls)
 
     next_parser = argparse.ArgumentParser(description=Color.yellowify(__doc__), add_help=False)
-    next_parser.add_argument('n', metavar='N', nargs=argparse.OPTIONAL, help='Step N times')
+    next_parser.add_argument('n', type=int, metavar='N', nargs=argparse.OPTIONAL, help='Step N times')
 
     @cmd2.with_argparser(next_parser)
     def do_nexti(self, args: argparse.Namespace):
         pc = int(unigdb.arch.CURRENT_ARCH.pc)
         insn = disass.get_current_instruction(pc)
 
-        step_over = int(disass.get_next_instruction(pc).address) - pc
+        if not args.n:
+            step_over = int(disass.get_next_instruction(pc).address) - pc
+        else:
+            step_over = unigdb.arch.CURRENT_ARCH.instruction_length * args.n
 
         if unigdb.arch.CURRENT_ARCH.is_call(insn):
             if unigdb.arch.CURRENT_ARCH.arch == 'MIPS':

@@ -1,7 +1,5 @@
 import abc
 import sys
-import re
-import binascii
 
 from unigdb.color import Color
 import unigdb.config
