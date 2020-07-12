@@ -1,7 +1,6 @@
 import argparse
 import cmd2
 
-
 import unigdb.arch
 from unigdb.color import Color
 import unigdb.disassemble as disass
@@ -39,5 +38,3 @@ class NextInstCommand(GenericCommand):
         setBreakpoint(pc + step_over, temporary=True)
         unigdb.proc.alive = True
         unigdb.arch.UC.emu_start(begin=pc, until=pc + 100)
-
-        # gdb.Breakpoint('*%#x' % (pc + 8), internal=True, temporary=True)

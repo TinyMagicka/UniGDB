@@ -10,7 +10,7 @@ import unigdb.commands
 import unigdb.prompt
 import unigdb.regs
 import unigdb.proc
-from unigdb.breakpoints import hasBreakpoint, delBreakpoint
+import unigdb.breakpoints
 from unigdb.color import Color
 
 
@@ -155,12 +155,15 @@ class CoreShell(cmd2.Cmd):
         unigdb.arch.UC.mem_map(self.mapping, self.mapping_size)
 
     def hook_code(self, uc, address, size, user_data):
-        has_break = hasBreakpoint(address)
+        has_break = unigdb.breakpoints.hasBreakpoint(address)
+        unigdb.breakpoints.restoreBreakpoints()
         if has_break is not None:
             uc.emu_stop()
             self.onecmd_plus_hooks('ctx ' + unigdb.config.get('context.layout'))
             if has_break is True:
-                delBreakpoint(address)
+                unigdb.breakpoints.delBreakpoint(address)
+            elif has_break is False:
+                unigdb.breakpoints.hideBreakpoint(address)
 
     def hook_block(self, uc, address, size, user_data):
         pass

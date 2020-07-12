@@ -11,3 +11,13 @@ def hasBreakpoint(addr: int):
 
 def delBreakpoint(addr: int):
     unigdb.commands.breakpoint._breakpoints_.pop(addr)
+
+
+def restoreBreakpoints():
+    for k in unigdb.commands.breakpoint._breakpoints_:
+        if unigdb.commands.breakpoint._breakpoints_[k] is None:
+            unigdb.commands.breakpoint._breakpoints_[k] = False
+
+
+def hideBreakpoint(addr: int):
+    unigdb.commands.breakpoint._breakpoints_[addr] = None

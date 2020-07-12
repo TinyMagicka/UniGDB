@@ -28,6 +28,7 @@ class BreakCommand(GenericCommand):
         if args.location:
             args.location = parse_and_eval(args.location)
             setBreakpoint(args.location, temporary=False)
+            message.success('Set breakpoint to %#08x' % args.location)
         else:
             message.hint('Current breakpoints:')
             print('Address\tTemporary')
