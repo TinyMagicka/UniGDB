@@ -34,7 +34,6 @@ class DetailRegistersCommand(GenericCommand):
             regs = unigdb.arch.CURRENT_ARCH.all_registers
 
         print_registers(registers=regs)
-        return None
 
 
 def print_registers(registers, ignored_registers=[], old_registers={}, flags=False):

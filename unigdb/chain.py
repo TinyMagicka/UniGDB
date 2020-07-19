@@ -75,7 +75,7 @@ def examine_mem_value(address, limit=LIMIT):
             return try_string.decode()[:string_limit] + '...'
         return try_string.decode()
 
-    for i in range(limit):
+    for _ in range(limit):
         # Don't follow cycles, except to stop at the second occurrence.
         if result.count(address) >= 2:
             break

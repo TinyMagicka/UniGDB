@@ -37,7 +37,6 @@ class RunCommand(GenericCommand):
             unigdb.arch.UC.emu_start(begin=reg_pc, until=reg_pc + 0x10000)
         except UcError as e:
             message.error('{!} Error => %s' % e)
-            return None
 
 
 @unigdb.commands.register_command
